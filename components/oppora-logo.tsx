@@ -10,7 +10,7 @@ export function OpporaLogo({ size = "default" }: { size?: "default" | "small" | 
   return (
     <span className="flex items-center" aria-label="Oppora.ai logo" role="img">
       <Image
-        src="/images/oppora-logo.png"
+        src="/Oppora_only_Logo_White.png"
         alt="Oppora.ai"
         width={imgSize[size]}
         height={imgSize[size]}
