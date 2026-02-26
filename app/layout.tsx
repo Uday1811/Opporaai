@@ -10,6 +10,10 @@ export const metadata: Metadata = {
   title: 'Oppora.ai - AI Sales Agents Built for Solopreneurs',
   description: 'Think, Type and Reach Out. AI-powered sales automation platform. Find leads, send emails, reply from your inbox and sync meetings to your CRM automatically.',
   keywords: ['AI sales', 'sales automation', 'lead generation', 'cold email', 'outbound sales'],
+  robots: {
+    index: false,
+    follow: false,
+  },
 }
 
 export const viewport: Viewport = {
