@@ -31,20 +31,10 @@ jobs:
 
       - name: Prepare deployment package
         run: |
-          # Copy static assets into standalone
-          cp -r .next/static .next/standalone/.next/static
-
-          # Copy public folder if it exists
-          if [ -d "public" ]; then
-            cp -r public .next/standalone/public
-          fi
-
-          # Copy app.js startup file into standalone root
-          cp app.js .next/standalone/app.js
-
-          # Create tarball (dereference symlinks for pnpm compat)
-          cd .next/standalone
-          tar czf ../../deploy.tar.gz --dereference .
+      - name: Prepare deployment package
+        run: |
+              cd out
+              tar czf ../deploy.tar.gz .
 
       - name: Generate .env for server
         run: |
