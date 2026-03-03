@@ -6,6 +6,15 @@ __v0_jsx-dev-runtime.ts
 # Common ignores
 node_modules/
 .next/
-.env*.local
 .DS_Store
 .vercel
+
+# Secrets & environment files (NEVER commit these)
+.env
+.env.*
+!.env.*.example
+
+# SSH keys
+*.pem
+id_*
+*_deploy

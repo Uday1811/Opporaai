@@ -1,0 +1,99 @@
+name: Deploy to cPanel
+
+on:
+  push:
+    branches: [main]
+
+# All secrets are sourced from .env.production via `pnpm setup:secrets`.
+# Deployment secrets: DEPLOY_HOST, DEPLOY_SSH_PORT, DEPLOY_USER, DEPLOY_APP_DIR, DEPLOY_SSH_KEY
+# App env vars: NODE_ENV, plus any others added to .env.production
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Prepare deployment package
+        run: |
+          # Copy static assets into standalone
+          cp -r .next/static .next/standalone/.next/static
+
+          # Copy public folder if it exists
+          if [ -d "public" ]; then
+            cp -r public .next/standalone/public
+          fi
+
+          # Copy app.js startup file into standalone root
+          cp app.js .next/standalone/app.js
+
+          # Create tarball (dereference symlinks for pnpm compat)
+          cd .next/standalone
+          tar czf ../../deploy.tar.gz --dereference .
+
+      - name: Generate .env for server
+        run: |
+          # APP_ENV_FILE contains the full .env content, base64-encoded by setup-secrets
+          echo "${{ secrets.APP_ENV_FILE }}" | base64 -d > deploy.env
+          echo "Generated .env with $(wc -l < deploy.env) entries"
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p ${{ secrets.DEPLOY_SSH_PORT }} ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Upload to server
+        run: |
+          scp -i ~/.ssh/deploy_key -P ${{ secrets.DEPLOY_SSH_PORT }} \
+            deploy.tar.gz deploy.env \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/home/${{ secrets.DEPLOY_USER }}/
+
+      - name: Deploy on server
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_SSH_PORT }} \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} bash -s << 'EOF'
+          set -e
+          APP_DIR="/home/$USER/${{ secrets.DEPLOY_APP_DIR }}"
+          DEPLOY_TAR="/home/$USER/deploy.tar.gz"
+          DEPLOY_ENV="/home/$USER/deploy.env"
+
+          echo ">>> Cleaning old deployment..."
+          cd "$APP_DIR"
+          find . -mindepth 1 -maxdepth 1 ! -name 'tmp' ! -name 'stderr.log' -exec rm -rf {} +
+
+          echo ">>> Extracting new deployment..."
+          tar xzf "$DEPLOY_TAR" -C "$APP_DIR"
+          rm -f "$DEPLOY_TAR"
+
+          echo ">>> Injecting .env..."
+          mv "$DEPLOY_ENV" "$APP_DIR/.env"
+
+          mkdir -p "$APP_DIR/tmp"
+
+          echo ">>> Restarting application..."
+          cloudlinux-selector restart --json --interpreter nodejs --app-root ~/${{ secrets.DEPLOY_APP_DIR }}
+
+          echo ">>> Deployment complete!"
+          EOF
+
+      - name: Cleanup SSH
+        if: always()
+        run: rm -rf ~/.ssh/deploy_key
