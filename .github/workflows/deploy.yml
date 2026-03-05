@@ -29,46 +29,12 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Prepare deployment package
-        run: |
-          cd out
-          tar czf ../deploy.tar.gz .
-
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          echo "StrictHostKeyChecking no" >> ~/.ssh/config
-          echo "UserKnownHostsFile /dev/null" >> ~/.ssh/config
-
-      - name: Upload to server
-        run: |
-          scp -i ~/.ssh/deploy_key -P ${{ secrets.DEPLOY_SSH_PORT }} \
-            deploy.tar.gz \
-            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/home/${{ secrets.DEPLOY_USER }}/
-
-      - name: Deploy on server
-        run: |
-          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_SSH_PORT }} \
-            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} bash -s << 'EOF'
-          set -e
-
-          APP_DIR="/home/$USER/${{ secrets.DEPLOY_APP_DIR }}"
-          DEPLOY_TAR="/home/$USER/deploy.tar.gz"
-
-          echo ">>> Cleaning old deployment..."
-          mkdir -p "$APP_DIR"
-          cd "$APP_DIR"
-          find . -mindepth 1 -maxdepth 1 ! -name 'tmp' ! -name 'stderr.log' -exec rm -rf {} +
-
-          echo ">>> Extracting new deployment..."
-          tar xzf "$DEPLOY_TAR" -C "$APP_DIR"
-          rm -f "$DEPLOY_TAR"
-
-          echo ">>> Deployment complete! (Static site - no server restart needed)"
-          EOF
-
-      - name: Cleanup SSH
-        if: always()
-        run: rm -rf ~/.ssh/deploy_key
+      - name: Deploy via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USER }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./out/
+          server-dir: /public_html/
+          dangerous-clean-slate: false
