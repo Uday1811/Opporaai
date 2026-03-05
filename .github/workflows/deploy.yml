@@ -24,22 +24,15 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Build
         run: pnpm build
 
       - name: Prepare deployment package
         run: |
-      - name: Prepare deployment package
-        run: |
-              cd out
-              tar czf ../deploy.tar.gz .
-
-      - name: Generate .env for server
-        run: |
-          echo "${{ secrets.APP_ENV_FILE }}" | base64 -d > deploy.env
-          echo "Generated .env with $(wc -l < deploy.env) entries"
+          cd out
+          tar czf ../deploy.tar.gz .
 
       - name: Setup SSH
         run: |
@@ -51,7 +44,7 @@ jobs:
       - name: Upload to server
         run: |
           scp -i ~/.ssh/deploy_key -P ${{ secrets.DEPLOY_SSH_PORT }} \
-            deploy.tar.gz deploy.env \
+            deploy.tar.gz \
             ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/home/${{ secrets.DEPLOY_USER }}/
 
       - name: Deploy on server
@@ -62,9 +55,9 @@ jobs:
 
           APP_DIR="/home/$USER/${{ secrets.DEPLOY_APP_DIR }}"
           DEPLOY_TAR="/home/$USER/deploy.tar.gz"
-          DEPLOY_ENV="/home/$USER/deploy.env"
 
           echo ">>> Cleaning old deployment..."
+          mkdir -p "$APP_DIR"
           cd "$APP_DIR"
           find . -mindepth 1 -maxdepth 1 ! -name 'tmp' ! -name 'stderr.log' -exec rm -rf {} +
 
@@ -72,15 +65,7 @@ jobs:
           tar xzf "$DEPLOY_TAR" -C "$APP_DIR"
           rm -f "$DEPLOY_TAR"
 
-          echo ">>> Injecting .env..."
-          mv "$DEPLOY_ENV" "$APP_DIR/.env"
-
-          mkdir -p "$APP_DIR/tmp"
-
-          echo ">>> Restarting application..."
-          cloudlinux-selector restart --json --interpreter nodejs --app-root ~/${{ secrets.DEPLOY_APP_DIR }}
-
-          echo ">>> Deployment complete!"
+          echo ">>> Deployment complete! (Static site - no server restart needed)"
           EOF
 
       - name: Cleanup SSH
